@@ -57,8 +57,6 @@ class VrtImpl {
   VrtNode *root_;
   VrtNode root_parent_;
   Vrt<ValueType> *vrt_;
-  // std::queue<VrtNode *> free_list_;
-  // SpinLock free_list_lock_;
   AtomicQueue<VrtNode *> free_queue_;
 };
 
@@ -109,9 +107,6 @@ void VrtImpl<ValueType>::UpdateVrt() {
 template <class ValueType>
 void VrtImpl<ValueType>::FreeNode(VrtNode *node) {
   free_queue_.Push(node);
-  // free_list_lock_.lock();
-  // free_list_.push(node);
-  // free_list_lock_.unlock();
 }
 
 template <class ValueType>
@@ -337,7 +332,6 @@ bool VrtImpl<ValueType>::UpsertImpl(VrtNode *&node, VrtNode *parent, std::string
     auto *old_node = node;
     node = new_node;
     parent->Unlock();
-    ;
     UpdateVrt();
     FreeNode(old_node);
     return true;
@@ -444,7 +438,6 @@ bool VrtImpl<ValueType>::DeleteImpl(VrtNode *&node, VrtNode *parent, std::string
     return false;
   }
   parent->Unlock();
-  ;
   if (VrtNode *&next_node = VrtNodeHelper::FindChild(node, key[same_prefix_length]); next_node != nullptr) {
     key.remove_prefix(same_prefix_length + 1);
     return DeleteImpl(next_node, node, key);
