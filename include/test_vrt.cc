@@ -1,5 +1,4 @@
 #include <array>
-#include <iostream>
 #include <random>
 #include <string>
 
@@ -132,12 +131,6 @@ TEST(RandomTest, RandomTest) {
     EXPECT_EQ(value, std::to_string(i));
   }
 }
-
-// TEST(MTest, MTest) {
-//   while (true) {
-//     sleep(5);
-//   }
-// }
 
 GTEST_API_ int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);

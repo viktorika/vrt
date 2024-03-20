@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <atomic>
 #include <cstdint>
-#include <memory>
 #include "vrt_comm.h"
 
 namespace vrt {

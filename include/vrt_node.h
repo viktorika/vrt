@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include "spin_lock.h"
 #include "vrt_comm.h"
@@ -13,6 +14,7 @@ namespace vrt {
 // memory layout
 // mutex_flat ---- has_value 1bit ---- key_length 20bit ---- child_cnt 8bit ---- childs ---- key ---- value ----
 
+template <bool kWriteLock = true>
 struct VrtNode {
   SpinLock spin_lock;
   uint32_t has_value : 1;
@@ -25,13 +27,22 @@ struct VrtNode {
     childs[static_cast<uint8_t>(edge)] = child;
     child_cnt++;
   }
-  inline void Lock() { spin_lock.lock(); }
-  inline void Unlock() { spin_lock.unlock(); }
+  inline void Lock() {
+    if constexpr (kWriteLock) {
+      spin_lock.lock();
+    }
+  }
+  inline void Unlock() {
+    if constexpr (kWriteLock) {
+      spin_lock.unlock();
+    }
+  }
 };
 
+template <bool kWriteLock = true>
 class VrtNodeHelper {
  public:
-  inline static uint32_t CheckSamePrefixLength(VrtNode *node, std::string_view key) {
+  inline static uint32_t CheckSamePrefixLength(VrtNode<kWriteLock> *node, std::string_view key) {
     size_t same_prefix_length = 0;
     size_t cmp_size = std::min(static_cast<size_t>(node->key_length), key.length());
     while ((cmp_size--) != 0U) {
@@ -43,21 +54,22 @@ class VrtNodeHelper {
     return same_prefix_length;
   }
 
-  inline static std::string GetKey(VrtNode *node) { return std::string(node->data, node->key_length); }
+  inline static std::string GetKey(VrtNode<kWriteLock> *node) { return std::string(node->data, node->key_length); }
 
   template <class ValueType>
-  inline static ValueType GetValue(VrtNode *node) {
+  inline static ValueType GetValue(VrtNode<kWriteLock> *node) {
     return *(reinterpret_cast<ValueType *>(node->data + node->key_length));
   }
 
-  inline static VrtNode *&FindChild(VrtNode *node, char find_char) {
+  inline static VrtNode<kWriteLock> *&FindChild(VrtNode<kWriteLock> *node, char find_char) {
     auto index = static_cast<uint8_t>(find_char);
     return node->childs[index];
   }
 
   template <class ValueType, class... Args>
-  inline static VrtNode *CreateVrtNode(std::string_view key, Args &&...args) {
-    VrtNode *new_node = reinterpret_cast<VrtNode *>(malloc(sizeof(VrtNode) + key.length() + sizeof(ValueType)));
+  inline static VrtNode<kWriteLock> *CreateVrtNode(std::string_view key, Args &&...args) {
+    VrtNode<kWriteLock> *new_node =
+        reinterpret_cast<VrtNode<kWriteLock> *>(malloc(sizeof(VrtNode<kWriteLock>) + key.length() + sizeof(ValueType)));
     new_node->has_value = 1;
     new_node->key_length = key.length();
     new_node->child_cnt = 0;
@@ -68,8 +80,9 @@ class VrtNodeHelper {
     return new_node;
   }
 
-  inline static VrtNode *CreateVrtNodeWithoutValue(std::string_view key) {
-    VrtNode *new_node = reinterpret_cast<VrtNode *>(malloc(sizeof(VrtNode) + key.length()));
+  inline static VrtNode<kWriteLock> *CreateVrtNodeWithoutValue(std::string_view key) {
+    VrtNode<kWriteLock> *new_node =
+        reinterpret_cast<VrtNode<kWriteLock> *>(malloc(sizeof(VrtNode<kWriteLock>) + key.length()));
     new_node->has_value = 0;
     new_node->key_length = key.length();
     new_node->child_cnt = 0;
@@ -80,9 +93,10 @@ class VrtNodeHelper {
   }
 
   template <class ValueType>
-  inline static VrtNode *CreateVrtNodeByRemovePrefix(VrtNode *node, size_t remove_size) {
-    size_t new_node_size = sizeof(VrtNode) + node->key_length - remove_size + (node->has_value ? sizeof(ValueType) : 0);
-    VrtNode *new_node = reinterpret_cast<VrtNode *>(malloc(new_node_size));
+  inline static VrtNode<kWriteLock> *CreateVrtNodeByRemovePrefix(VrtNode<kWriteLock> *node, size_t remove_size) {
+    size_t new_node_size =
+        sizeof(VrtNode<kWriteLock>) + node->key_length - remove_size + (node->has_value ? sizeof(ValueType) : 0);
+    VrtNode<kWriteLock> *new_node = reinterpret_cast<VrtNode<kWriteLock> *>(malloc(new_node_size));
     new_node->has_value = node->has_value;
     new_node->key_length = node->key_length - remove_size;
     new_node->child_cnt = node->child_cnt;
@@ -97,8 +111,9 @@ class VrtNodeHelper {
   }
 
   template <class ValueType, class... Args>
-  inline static VrtNode *CreateVrtNodeByAddValue(VrtNode *node, Args &&...args) {
-    VrtNode *new_node = reinterpret_cast<VrtNode *>(malloc(sizeof(VrtNode) + node->key_length + sizeof(ValueType)));
+  inline static VrtNode<kWriteLock> *CreateVrtNodeByAddValue(VrtNode<kWriteLock> *node, Args &&...args) {
+    VrtNode<kWriteLock> *new_node = reinterpret_cast<VrtNode<kWriteLock> *>(
+        malloc(sizeof(VrtNode<kWriteLock>) + node->key_length + sizeof(ValueType)));
     new_node->has_value = true;
     new_node->key_length = node->key_length;
     new_node->child_cnt = node->child_cnt;
@@ -110,8 +125,9 @@ class VrtNodeHelper {
   }
 
   template <class ValueType>
-  inline static VrtNode *CreateVrtNodeByDeleteValue(VrtNode *node) {
-    VrtNode *new_node = reinterpret_cast<VrtNode *>(malloc(sizeof(VrtNode) + node->key_length));
+  inline static VrtNode<kWriteLock> *CreateVrtNodeByDeleteValue(VrtNode<kWriteLock> *node) {
+    VrtNode<kWriteLock> *new_node =
+        reinterpret_cast<VrtNode<kWriteLock> *>(malloc(sizeof(VrtNode<kWriteLock>) + node->key_length));
     new_node->has_value = false;
     new_node->key_length = node->key_length;
     new_node->child_cnt = node->child_cnt;
@@ -122,7 +138,7 @@ class VrtNodeHelper {
   }
 
   template <class ValueType>
-  inline static void DestroyNode(VrtNode *node) {
+  inline static void DestroyNode(VrtNode<kWriteLock> *node) {
     if (node->has_value) {
       auto *value = reinterpret_cast<ValueType *>(node->data + node->key_length);
       value->~ValueType();
@@ -132,7 +148,7 @@ class VrtNodeHelper {
   }
 
   template <class ValueType>
-  inline static void DestroyTree(VrtNode *node) {
+  inline static void DestroyTree(VrtNode<kWriteLock> *node) {
     for (int i = 0; i < kNodeChildMaxCnt; i++) {
       if (nullptr == node->childs[i]) {
         continue;
