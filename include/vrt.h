@@ -1,8 +1,8 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include "atomic_queue.h"
-#include "spin_lock.h"
 #include "vrt_comm.h"
 #include "vrt_node.h"
 
@@ -15,9 +15,8 @@ template <class ValueType, bool kWriteLock = true>
 class VrtImpl {
  public:
   VrtImpl() = delete;
-  VrtImpl(Vrt<ValueType, kWriteLock> *vrt) : root_(nullptr), vrt_(vrt), free_queue_(), root_parent_() {}
-  VrtImpl(VrtNode<kWriteLock> *root, Vrt<ValueType, kWriteLock> *vrt)
-      : root_(root), vrt_(vrt), free_queue_(), root_parent_() {}
+  VrtImpl(Vrt<ValueType, kWriteLock> *vrt) : root_(nullptr), vrt_(vrt), free_queue_() {}
+  VrtImpl(VrtNode<kWriteLock> *root, Vrt<ValueType, kWriteLock> *vrt) : root_(root), vrt_(vrt), free_queue_() {}
   VrtImpl(const VrtImpl &) = delete;
   void operator=(const VrtImpl &) = delete;
   VrtImpl(VrtImpl &&) = default;
@@ -54,7 +53,6 @@ class VrtImpl {
   void FreeNode(VrtNode<kWriteLock> *node);
 
   VrtNode<kWriteLock> *root_;
-  VrtNode<kWriteLock> root_parent_;
   Vrt<ValueType, kWriteLock> *vrt_;
   AtomicQueue<VrtNode<kWriteLock> *> free_queue_;
 };
@@ -62,7 +60,7 @@ class VrtImpl {
 template <class ValueType, bool kWriteLock>
 class Vrt {
  public:
-  Vrt() : impl_(std::make_shared<VrtImpl<ValueType, kWriteLock>>(this)), impl_lock_(){};
+  Vrt() : impl_(std::make_shared<VrtImpl<ValueType, kWriteLock>>(this)), root_parent_(){};
   Vrt(const Vrt &) = delete;
   Vrt(Vrt &&) = default;
   ~Vrt();
@@ -80,12 +78,12 @@ class Vrt {
 
  private:
   std::shared_ptr<VrtImpl<ValueType, kWriteLock>> impl_;
-  SpinLock impl_lock_;
+  VrtNode<kWriteLock> root_parent_;
 };
 
 template <class ValueType, bool kWriteLock>
 Vrt<ValueType, kWriteLock>::~Vrt() {
-  impl_->DestroyTree();
+  std::atomic_load(&impl_)->DestroyTree();
 }
 
 template <class ValueType, bool kWriteLock>
@@ -98,13 +96,7 @@ void VrtImpl<ValueType, kWriteLock>::DestroyTree() {
 
 template <class ValueType, bool kWriteLock>
 void VrtImpl<ValueType, kWriteLock>::UpdateVrt() {
-  if constexpr (kWriteLock) {
-    vrt_->impl_lock_.lock();
-  }
-  vrt_->impl_ = std::make_shared<VrtImpl<ValueType, kWriteLock>>(root_, vrt_);
-  if constexpr (kWriteLock) {
-    vrt_->impl_lock_.unlock();
-  }
+  std::atomic_store(&vrt_->impl_, std::make_shared<VrtImpl<ValueType, kWriteLock>>(root_, vrt_));
 }
 
 template <class ValueType, bool kWriteLock>
@@ -117,7 +109,7 @@ bool Vrt<ValueType, kWriteLock>::Find(std::string_view key, ValueType *value) {
   if (unlikely(key.empty())) {
     return false;
   }
-  auto impl_ptr = impl_;
+  auto impl_ptr = std::atomic_load_explicit(&impl_, std::memory_order_acquire);
   return impl_ptr->Find(key, value);
 }
 
@@ -156,20 +148,20 @@ bool Vrt<ValueType, kWriteLock>::Insert(std::string_view key, ValueType *old_val
   if (unlikely(key.empty() || key.size() >= kMaxKeySize)) {
     return false;
   }
-  auto impl_ptr = impl_;
+  auto impl_ptr = std::atomic_load(&impl_);
   return impl_ptr->Insert(key, old_value, std::forward<Args>(args)...);
 }
 
 template <class ValueType, bool kWriteLock>
 template <class... Args>
 bool VrtImpl<ValueType, kWriteLock>::Insert(std::string_view key, ValueType *old_value, Args &&...args) {
-  root_parent_.Lock();
+  vrt_->root_parent_.Lock();
   if (nullptr == root_) {
     root_ = VrtNodeHelper<kWriteLock>::template CreateVrtNode<ValueType>(key, std::forward<Args>(args)...);
-    root_parent_.Unlock();
+    vrt_->root_parent_.Unlock();
     return true;
   }
-  return InsertImpl(root_, &root_parent_, key, old_value, std::forward<Args>(args)...);
+  return InsertImpl(root_, &vrt_->root_parent_, key, old_value, std::forward<Args>(args)...);
 }
 
 template <class ValueType, bool kWriteLock>
@@ -192,7 +184,7 @@ bool VrtImpl<ValueType, kWriteLock>::InsertImpl(VrtNode<kWriteLock> *&node, VrtN
     auto *old_node = node;
     node = new_node;
     parent->Unlock();
-    UpdateVrt();
+    UpdateVrt();  // TODO update vrt 优化，有可能只需要free node时再刷新，或者这里可以池化这个结构
     FreeNode(old_node);
     return true;
   }
@@ -250,19 +242,19 @@ bool Vrt<ValueType, kWriteLock>::Update(std::string_view key, Args &&...args) {
   if (unlikely(key.empty() || key.size() >= kMaxKeySize)) {
     return false;
   }
-  auto impl_ptr = impl_;
+  auto impl_ptr = std::atomic_load(&impl_);
   return impl_ptr->Update(key, std::forward<Args>(args)...);
 }
 
 template <class ValueType, bool kWriteLock>
 template <class... Args>
 bool VrtImpl<ValueType, kWriteLock>::Update(std::string_view key, Args &&...args) {
-  root_parent_.Lock();
+  vrt_->root_parent_.Lock();
   if (nullptr == root_) {
-    root_parent_.Unlock();
+    vrt_->root_parent_.Unlock();
     return false;
   }
-  return UpdateImpl(root_, &root_parent_, key, std::forward<Args>(args)...);
+  return UpdateImpl(root_, &vrt_->root_parent_, key, std::forward<Args>(args)...);
 }
 
 template <class ValueType, bool kWriteLock>
@@ -308,20 +300,20 @@ bool Vrt<ValueType, kWriteLock>::Upsert(std::string_view key, Args &&...args) {
   if (unlikely(key.empty() || key.size() >= kMaxKeySize)) {
     return false;
   }
-  auto impl_ptr = impl_;
+  auto impl_ptr = std::atomic_load(&impl_);
   return impl_ptr->Upsert(key, std::forward<Args>(args)...);
 }
 
 template <class ValueType, bool kWriteLock>
 template <class... Args>
 bool VrtImpl<ValueType, kWriteLock>::Upsert(std::string_view key, Args &&...args) {
-  root_parent_.Lock();
+  vrt_->root_parent_.Lock();
   if (nullptr == root_) {
     root_ = VrtNodeHelper<kWriteLock>::template CreateVrtNode<ValueType>(key, std::forward<Args>(args)...);
-    root_parent_.Unlock();
+    vrt_->root_parent_.Unlock();
     return true;
   }
-  return UpsertImpl(root_, &root_parent_, key, std::forward<Args>(args)...);
+  return UpsertImpl(root_, &vrt_->root_parent_, key, std::forward<Args>(args)...);
 }
 
 template <class ValueType, bool kWriteLock>
@@ -397,18 +389,18 @@ bool Vrt<ValueType, kWriteLock>::Delete(std::string_view key) {
   if (unlikely(key.empty() || key.size() >= kMaxKeySize)) {
     return false;
   }
-  auto impl_ptr = impl_;
+  auto impl_ptr = std::atomic_load(&impl_);
   return impl_ptr->Delete(key);
 }
 
 template <class ValueType, bool kWriteLock>
 bool VrtImpl<ValueType, kWriteLock>::Delete(std::string_view key) {
-  root_parent_.Lock();
+  vrt_->root_parent_.Lock();
   if (nullptr == root_) {
-    root_parent_.Unlock();
+    vrt_->root_parent_.Unlock();
     return false;
   }
-  return DeleteImpl(root_, &root_parent_, key);
+  return DeleteImpl(root_, &vrt_->root_parent_, key);
 }
 
 template <class ValueType, bool kWriteLock>

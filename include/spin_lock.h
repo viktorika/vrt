@@ -23,11 +23,11 @@ class Sleeper {
     if (spin_count_ < kMaxActiveSpin) {
       ++spin_count_;
 #if defined(__x86_64__) || defined(__i386__)
-    asm volatile("pause");
+      asm volatile("pause");
 #elif defined(__aarch64__) || defined(__arm__)
-    asm volatile("yield");
+      asm volatile("yield");
 #else
-    #error "Unsupported architecture"
+#  error "Unsupported architecture"
 #endif
     } else {
       sleep();
@@ -58,7 +58,8 @@ class SpinLock {
   std::atomic<uint8_t> lock_;
 
   bool cas(uint8_t compare, uint8_t new_val) noexcept {
-    return lock_.compare_exchange_strong(compare, new_val, std::memory_order_release, std::memory_order_relaxed);
+    // todo maybe use release
+    return lock_.compare_exchange_strong(compare, new_val, std::memory_order_acquire, std::memory_order_relaxed);
   }
 };
 

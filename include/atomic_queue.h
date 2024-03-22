@@ -4,6 +4,7 @@
 
 namespace vrt {
 
+// TODO优化逻辑
 template <class ValueType>
 class AtomicQueue {
  public:
@@ -27,6 +28,7 @@ class AtomicQueue {
     while (cur != nullptr) {
       auto *old = cur;
       cur = cur->next.load(std::memory_order_acquire);
+      free(old->value);
       delete old;
     }
   }
@@ -37,7 +39,7 @@ class AtomicQueue {
     Node *cur_first_node = head_.next.load(std::memory_order_acquire);
     do {
       new_node->next.store(cur_first_node, std::memory_order_release);
-    } while (!head_.next.compare_exchange_strong(cur_first_node, new_node, std::memory_order_release,
+    } while (!head_.next.compare_exchange_strong(cur_first_node, new_node, std::memory_order_acq_rel,
                                                  std::memory_order_relaxed));
   }
 
