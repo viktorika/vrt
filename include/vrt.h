@@ -3,6 +3,7 @@
 #include <atomic>
 #include <memory>
 #include "atomic_queue.h"
+#include "ebr.h"
 #include "vrt_comm.h"
 #include "vrt_node.h"
 
@@ -78,6 +79,9 @@ class Vrt {
 
  private:
   std::shared_ptr<VrtImpl<ValueType, kWriteLock>> impl_;
+  static thread_local EbrThreadLocal<VrtNode<kWriteLock>, VrtNodeDestroy<kWriteLock>>
+      ebr_tls_;  // TODO 暂时没找到办法可以实现每个对象有自己的thread_local对象，后面再看
+  EbrGlobal<VrtNode<kWriteLock>, VrtNodeDestroy<kWriteLock>> ebr_global_;
   VrtNode<kWriteLock> root_parent_;
 };
 
