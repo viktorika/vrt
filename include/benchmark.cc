@@ -10,7 +10,7 @@
 uint32_t kKeySize = 10000;
 uint32_t kKeyLength = 20;
 std::vector<std::string> keys(kKeySize);
-constexpr uint32_t thread_num = 10;
+constexpr uint32_t thread_num = 1;
 
 static int GenKeys() {
   std::random_device rd;
@@ -49,7 +49,7 @@ static void RunInsertDeConstructPhmapByMutex(benchmark::State& state) {
 
 static void RunInsertDeConstructArt(benchmark::State& state) {
   for (auto _ : state) {
-    vrt::Vrt<std::string> vrt;
+    vrt::Vrt<std::string, true, thread_num> vrt;
     auto func = [&](int start, int end) {
       for (int i = start; i < end; i++) {
         vrt.Upsert(keys[i], "123");
@@ -94,7 +94,7 @@ static void RunFindPhmapByMutex(benchmark::State& state) {
 }
 
 static void RunFindArt(benchmark::State& state) {
-  vrt::Vrt<std::string> vrt;
+  vrt::Vrt<std::string, true, thread_num> vrt;
   for (int i = 0; i < kKeySize; i++) {
     vrt.Upsert(keys[i], "123");
   }
@@ -148,7 +148,7 @@ static void RunDeletePhmapByRWMutex(benchmark::State& state) {
 
 static void RunDeleteArt(benchmark::State& state) {
   for (auto _ : state) {
-    vrt::Vrt<std::string> vrt;
+    vrt::Vrt<std::string, true, thread_num> vrt;
     for (int i = 0; i < kKeySize; i++) {
       vrt.Upsert(keys[i], "123");
     }
