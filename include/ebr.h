@@ -2,11 +2,46 @@
 
 #include <array>
 #include <atomic>
+#include <mutex>
+#include <vector>
 
 namespace vrt {
 
 constexpr uint8_t kEpochSize = 3;
 constexpr uint8_t kCacheLineSize = 64;
+
+// 思路，有一个全局的线程id分配器，维护了n个线程id。
+// GetThreadID时创建一个线程唯一变量，这个变量初始化会从线程id分配器里获取一个可用的线程id，销毁时会释放这个线程id
+
+class ThreadIdManager;
+
+struct ThreadID {
+  ThreadID() {
+    tid = ThreadIdManager::AcquireThreadID();
+  }
+  ~ThreadID() {
+    ThreadIdManager::ReleaseThreadID(tid);
+  }
+  uint32_t tid;
+};
+
+class ThreadIdManager {
+ public:
+  static uint32_t AcquireThreadID() {
+    std::lock_guard<std::mutex> lock(tid_list_mutex_);
+    auto tid = tid_list_.back();
+    tid_list_.pop_back();
+    return tid;
+  }
+  static uint32_t ReleaseThreadID(const uint32_t tid) {
+    std::lock_guard<std::mutex> lock(tid_list_mutex_);
+    tid_list_.emplace_back(tid);
+  }
+
+ private:
+  static std::vector<uint32_t> tid_list_;
+  static std::mutex tid_list_mutex_;
+};
 
 template <class RCObject, class DestroyClass, uint32_t thread_num>
 class EbrManager {
@@ -54,8 +89,8 @@ class EbrManager {
 
  private:
   static inline uint32_t GetThreadID() {
-    thread_local uint32_t id = thread_cnt_.fetch_add(1, std::memory_order_relaxed);
-    return id;
+    thread_local ThreadID id;
+    return id.tid;
   }
 
   inline void TryGC() {
