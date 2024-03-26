@@ -159,13 +159,14 @@ class VrtNodeHelper {
   }
 };
 
-template <bool kWriteLock = true>
+template <class ValueType, bool kWriteLock = true>
 class VrtNodeDestroy {
+ public:
   VrtNodeDestroy() = delete;
-  VrtNodeDestroy(VrtNode<kWriteLock> *node) { VrtNodeHelper<kWriteLock>::DestroyNode(node); }
+  VrtNodeDestroy(VrtNode<kWriteLock> *node) { VrtNodeHelper<kWriteLock>::template DestroyNode<ValueType>(node); }
   VrtNodeDestroy(const VrtNodeDestroy &) = delete;
-  void operator=(const VrtNodeDestroy &) = delete;  // TODO check operator=
+  VrtNodeDestroy &operator=(const VrtNodeDestroy &) = delete;
   VrtNodeDestroy(VrtNodeDestroy &&) = delete;
-}
+};
 
 }  // namespace vrt
