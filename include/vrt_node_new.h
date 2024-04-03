@@ -157,9 +157,9 @@ class VrtNodeHelper {
     switch (node->type) {
       case Node4: {
         auto *node4 = static_cast<VrtNode4<kWriteLock> *>(node);
-        for (int i = 0; i < node4->child_cnt_; i++) {
-          if (node4->edge_[i] == find_char) {
-            return node4->childs_[i];
+        for (int i = 0; i < node4->child_cnt; i++) {
+          if (node4->edge[i] == find_char) {
+            return node4->childs[i];
           }
         }
       } break;
@@ -167,7 +167,7 @@ class VrtNodeHelper {
         auto *node16 = static_cast<VrtNode16<kWriteLock> *>(node);
         for (int i = 0; i < node16->child_cnt; i++) {
           if (node16->edge[i] == find_char) {
-            return node16->childs_[i];
+            return node16->childs[i];
           }
         }
       } break;
@@ -188,7 +188,111 @@ class VrtNodeHelper {
     return kVrtNodeNullObject;
   }
 
-  // TODO addchild，一种是默认空间足够，直接在当前节点修改。另一种是需要检查空间是否足够，并且重新分配一个新节点修改。同时parent的锁要调整
+  template <class ValueType>
+  inline static VrtNode<kWriteLock> *AddChild(VrtNode<kWriteLock> *node, char edge, VrtNode<kWriteLock> *child) {
+    switch (node->type) {
+      case Node4: {
+        auto *node4 = reinterpret_cast<VrtNode4<kWriteLock> *>(node);
+        if (node4->child_cnt < kFour) {
+          node4->edge[node4->child_cnt] = edge;
+          node4->childs[node4->child_cnt] = child;
+          node4->child_cnt++;
+          return node;
+        }
+        VrtNode16<kWriteLock> *node16;
+        std::string_view key(node4->data, node4->key_length);
+        if (node4->has_value) {
+          auto *value_ptr = reinterpret_cast<ValueType *>(node4->data + node4->key_length);
+          node16 = reinterpret_cast<VrtNode16<kWriteLock> *>(CreateVrtNode<Node16, ValueType>(key, *value_ptr));
+        } else {
+          node16 = reinterpret_cast<VrtNode16<kWriteLock> *>(CreateVrtNodeWithoutValue<Node16>(key));
+        }
+        memcpy(node16->edge, node4->edge, sizeof(node4->edge));
+        memcpy(node16->childs, node4->childs, sizeof(node4->childs));
+        node16->edge[kFour] = edge;
+        node16->childs[kFour] = child;
+        node16->child_cnt = kFour + 1;
+        return node16;
+      } break;
+      case Node16: {
+        auto *node16 = reinterpret_cast<VrtNode16<kWriteLock> *>(node);
+        if (node16->child_cnt < kSixteen) {
+          node16->edge[node16->child_cnt] = edge;
+          node16->childs[node16->child_cnt] = child;
+          node16->child_cnt++;
+          return node;
+        }
+        VrtNode48<kWriteLock> *node48;
+        std::string_view key(node16->data, node16->key_length);
+        if (node16->has_value) {
+          auto *value_ptr = reinterpret_cast<ValueType *>(node16->data + node16->key_length);
+          node48 = reinterpret_cast<VrtNode48<kWriteLock> *>(CreateVrtNode<Node48, ValueType>(key, *value_ptr));
+        } else {
+          node48 = reinterpret_cast<VrtNode48<kWriteLock> *>(CreateVrtNodeWithoutValue<Node48>(key));
+        }
+        for (int i = 0; i < kSixteen; i++) {
+          node48->childs_index[static_cast<uint8_t>(node16->edge[i])] = i;
+        }
+        memcpy(node48->childs, node16->childs, sizeof(node16->childs));
+        node48->childs_index[static_cast<uint8_t>(edge)] = kSixteen;
+        node48->childs[kSixteen] = child;
+        node48->child_cnt = kSixteen + 1;
+        return node48;
+      } break;
+      case Node48: {
+        auto *node48 = reinterpret_cast<VrtNode48<kWriteLock> *>(node);
+        auto next_char_index = static_cast<uint8_t>(edge);
+        if (node48->child_cnt < kFortyEight) {
+          node48->childs_index[next_char_index] = node48->child_cnt;
+          node48->childs[node48->child_cnt] = child;
+          node48->child_cnt++;
+          return node;
+        }
+        VrtNode256<kWriteLock> *node256;
+        std::string_view key(node48->data, node48->key_length);
+        if (node48->has_value) {
+          auto *value_ptr = reinterpret_cast<ValueType *>(node48->data + node48->key_length);
+          node256 = reinterpret_cast<VrtNode256<kWriteLock> *>(CreateVrtNode<Node256, ValueType>(key, *value_ptr));
+        } else {
+          node256 = reinterpret_cast<VrtNode256<kWriteLock> *>(CreateVrtNodeWithoutValue<Node256>(key));
+        }
+        for (int i = 0; i < kTwoFiveSix; i++) {
+          if (node48->childs_index[i] == -1) {
+            continue;
+          }
+          node256->childs[i] = node48->childs[static_cast<uint8_t>(node48->childs_index[i])];
+        }
+        node256->childs[next_char_index] = child;
+        node256->child_cnt = kFortyEight + 1;
+        return node256;
+      } break;
+      case Node256: {
+        auto *node256 = reinterpret_cast<VrtNode256<kWriteLock> *>(node);
+        auto next_char_index = static_cast<uint8_t>(edge);
+        node256->childs[next_char_index] = child;
+        node256->child_cnt++;
+        return node;
+      } break;
+      case LeafNode: {
+        auto *leaf_node = reinterpret_cast<VrtLeafNode<kWriteLock> *>(node);
+        std::string_view key(leaf_node->data, leaf_node->key_length);
+        VrtNode4<kWriteLock> *node4;
+        if (leaf_node->has_value) {
+          auto *value_ptr = reinterpret_cast<ValueType *>(leaf_node->data + leaf_node->key_length);
+          node4 = reinterpret_cast<VrtNode4<kWriteLock> *>(CreateVrtNode<Node4, ValueType>(key, *value_ptr));
+        } else {
+          node4 = reinterpret_cast<VrtNode4<kWriteLock> *>(CreateVrtNodeWithoutValue<Node4>(key));
+        }
+        node4->edge[0] = edge;
+        node4->childs[0] = child;
+        node4->child_cnt = 1;
+        return node4;
+      } break;
+      default:
+        assert(false);
+    }
+    return nullptr;
+  }
 
   template <VrtNodeType node_type, class ValueType, class... Args>
   inline static VrtNode<kWriteLock> *CreateVrtNode(std::string_view key, Args &&...args) {
