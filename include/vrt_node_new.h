@@ -188,7 +188,7 @@ class VrtNodeHelper {
     return kVrtNodeNullObject;
   }
 
-  // TODO addchild
+  // TODO addchild，一种是默认空间足够，直接在当前节点修改。另一种是需要检查空间是否足够，并且重新分配一个新节点修改。同时parent的锁要调整
 
   template <VrtNodeType node_type, class ValueType, class... Args>
   inline static VrtNode<kWriteLock> *CreateVrtNode(std::string_view key, Args &&...args) {
