@@ -142,12 +142,14 @@ class EbrManager {
     RCObject *obj;
     RetireNode *next;
   };
+  std::array<char, kCacheLineSize> start_padding_;
   std::array<TLS, kReadThreadNum> tls_list_;
   std::atomic<uint8_t> global_epoch_;
-  char padding[kCacheLineSize - sizeof(std::atomic<uint8_t>)];  // TODO 待验证是否成功隔离
+  std::array<char, kCacheLineSize> mid_padding_;
   std::atomic_flag update_;
   std::atomic<uint32_t> write_cnt_;
   std::atomic<RetireNode *> retire_list_[kEpochSize];
+  std::array<char, kCacheLineSize> end_padding_;
 };
 
 }  // namespace vrt

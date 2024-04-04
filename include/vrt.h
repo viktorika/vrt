@@ -39,7 +39,7 @@ class Vrt {
 
   VrtNode<kWriteLock> *root_;
   EbrManager<VrtNode<kWriteLock>, VrtNodeDestroy<ValueType, kWriteLock>, kReadThreadNum> ebr_mgr_;
-  VrtNode<kWriteLock> root_parent_;  // TODO false sharing
+  VrtNode<kWriteLock> root_parent_;
 };
 
 template <class ValueType, bool kWriteLock, uint32_t kReadThreadNum>
@@ -99,7 +99,7 @@ bool Vrt<ValueType, kWriteLock, kReadThreadNum>::Insert(std::string_view key, Va
   }
   root_parent_.Lock();
   if (nullptr == root_) {
-    root_ = VrtNodeHelper<kWriteLock>::template CreateVrtNode<ValueType>(key, std::forward<Args>(args)...);
+    root_ = VrtNodeHelper<kWriteLock>::template CreateVrtNode<LeafNode, ValueType>(key, std::forward<Args>(args)...);
     root_parent_.Unlock();
     return true;
   }
@@ -116,14 +116,15 @@ bool Vrt<ValueType, kWriteLock, kReadThreadNum>::InsertImpl(VrtNode<kWriteLock> 
   if (same_prefix_length < key.length() && same_prefix_length < node->key_length) {
     // 同前缀部分作为父节点，旧节点去掉相同部分后作为child1，key剩余部分新建结点作为child2。
     std::string_view new_node_key = key.substr(0, same_prefix_length);
-    auto *new_node = VrtNodeHelper<kWriteLock>::CreateVrtNodeWithoutValue(new_node_key);
+    auto *new_node = VrtNodeHelper<kWriteLock>::template CreateVrtNodeWithoutValue<Node4>(new_node_key);
     auto *child =
         VrtNodeHelper<kWriteLock>::template CreateVrtNodeByRemovePrefix<ValueType>(node, same_prefix_length + 1);
-    new_node->AddChild(node->data[same_prefix_length], child);
+    VrtNodeHelper<kWriteLock>::template AddChild<ValueType>(
+        new_node, VrtNodeHelper<kWriteLock>::GetKeyIndexChar(node, same_prefix_length), child);
     char next_char = key[same_prefix_length];
     key.remove_prefix(same_prefix_length + 1);
-    child = VrtNodeHelper<kWriteLock>::template CreateVrtNode<ValueType>(key, std::forward<Args>(args)...);
-    new_node->AddChild(next_char, child);
+    child = VrtNodeHelper<kWriteLock>::template CreateVrtNode<LeafNode, ValueType>(key, std::forward<Args>(args)...);
+    VrtNodeHelper<kWriteLock>::template AddChild<ValueType>(new_node, next_char, child);
     auto *old_node = node;
     node = new_node;
     parent->Unlock();
@@ -134,10 +135,11 @@ bool Vrt<ValueType, kWriteLock, kReadThreadNum>::InsertImpl(VrtNode<kWriteLock> 
     // 同前缀部分作为父节点并且插入值，旧节点去掉相同部分后作为child1
     std::string_view new_node_key = key.substr(0, same_prefix_length);
     auto *new_node =
-        VrtNodeHelper<kWriteLock>::template CreateVrtNode<ValueType>(new_node_key, std::forward<Args>(args)...);
+        VrtNodeHelper<kWriteLock>::template CreateVrtNode<Node4, ValueType>(new_node_key, std::forward<Args>(args)...);
     auto *child =
         VrtNodeHelper<kWriteLock>::template CreateVrtNodeByRemovePrefix<ValueType>(node, same_prefix_length + 1);
-    new_node->AddChild(node->data[same_prefix_length], child);
+    VrtNodeHelper<kWriteLock>::template AddChild<ValueType>(
+        new_node, VrtNodeHelper<kWriteLock>::GetKeyIndexChar(node, same_prefix_length), child);
     auto *old_node = node;
     node = new_node;
     parent->Unlock();
@@ -160,17 +162,23 @@ bool Vrt<ValueType, kWriteLock, kReadThreadNum>::InsertImpl(VrtNode<kWriteLock> 
     FreeNode(old_node);
     return true;
   }
-  parent->Unlock();
   // 继续搜索，没有找到对应子节点，增新增叶子挂在当前节点上
   if (VrtNode<kWriteLock> *&next_node = VrtNodeHelper<kWriteLock>::FindChild(node, key[same_prefix_length]);
       next_node != nullptr) {
+    parent->Unlock();
     key.remove_prefix(same_prefix_length + 1);
     return InsertImpl(next_node, node, key, old_value, std::forward<Args>(args)...);
   }
   char next_char = key[same_prefix_length];
   key.remove_prefix(same_prefix_length + 1);
-  auto *new_node = VrtNodeHelper<kWriteLock>::template CreateVrtNode<ValueType>(key, std::forward<Args>(args)...);
-  node->AddChild(next_char, new_node);
+  auto *new_node =
+      VrtNodeHelper<kWriteLock>::template CreateVrtNode<LeafNode, ValueType>(key, std::forward<Args>(args)...);
+  auto *node_pre_add_child = node;
+  node = VrtNodeHelper<kWriteLock>::template AddChild<ValueType>(node, next_char, new_node);
+  if (node != node_pre_add_child) {
+    FreeNode(node_pre_add_child);
+  }
+  parent->Unlock();
   node->Unlock();
   return true;
 }
@@ -232,7 +240,7 @@ bool Vrt<ValueType, kWriteLock, kReadThreadNum>::Upsert(std::string_view key, Ar
   }
   root_parent_.Lock();
   if (nullptr == root_) {
-    root_ = VrtNodeHelper<kWriteLock>::template CreateVrtNode<ValueType>(key, std::forward<Args>(args)...);
+    root_ = VrtNodeHelper<kWriteLock>::template CreateVrtNode<LeafNode, ValueType>(key, std::forward<Args>(args)...);
     root_parent_.Unlock();
     return true;
   }
@@ -248,15 +256,16 @@ bool Vrt<ValueType, kWriteLock, kReadThreadNum>::UpsertImpl(VrtNode<kWriteLock> 
   if (same_prefix_length < key.length() && same_prefix_length < node->key_length) {
     // 同前缀部分作为父节点，旧节点去掉相同部分后作为child1，key剩余部分新建结点作为child2。
     std::string_view new_node_key = key.substr(0, same_prefix_length);
-    auto *new_node = VrtNodeHelper<kWriteLock>::CreateVrtNodeWithoutValue(new_node_key);
+    auto *new_node = VrtNodeHelper<kWriteLock>::template CreateVrtNodeWithoutValue<Node4>(new_node_key);
     auto *child =
         VrtNodeHelper<kWriteLock>::template CreateVrtNodeByRemovePrefix<ValueType>(node, same_prefix_length + 1);
-    new_node->AddChild(node->data[same_prefix_length], child);
+    VrtNodeHelper<kWriteLock>::template AddChild<ValueType>(
+        new_node, VrtNodeHelper<kWriteLock>::GetKeyIndexChar(node, same_prefix_length), child);
 
     char next_char = key[same_prefix_length];
     key.remove_prefix(same_prefix_length + 1);
-    child = VrtNodeHelper<kWriteLock>::template CreateVrtNode<ValueType>(key, std::forward<Args>(args)...);
-    new_node->AddChild(next_char, child);
+    child = VrtNodeHelper<kWriteLock>::template CreateVrtNode<LeafNode, ValueType>(key, std::forward<Args>(args)...);
+    VrtNodeHelper<kWriteLock>::template AddChild<ValueType>(new_node, next_char, child);
 
     auto *old_node = node;
     node = new_node;
@@ -268,10 +277,11 @@ bool Vrt<ValueType, kWriteLock, kReadThreadNum>::UpsertImpl(VrtNode<kWriteLock> 
     // 同前缀部分作为父节点并且插入值，旧节点去掉相同部分后作为child1
     std::string_view new_node_key = key.substr(0, same_prefix_length);
     auto *new_node =
-        VrtNodeHelper<kWriteLock>::template CreateVrtNode<ValueType>(new_node_key, std::forward<Args>(args)...);
+        VrtNodeHelper<kWriteLock>::template CreateVrtNode<Node4, ValueType>(new_node_key, std::forward<Args>(args)...);
     auto *child =
         VrtNodeHelper<kWriteLock>::template CreateVrtNodeByRemovePrefix<ValueType>(node, same_prefix_length + 1);
-    new_node->AddChild(node->data[same_prefix_length], child);
+    VrtNodeHelper<kWriteLock>::template AddChild<ValueType>(
+        new_node, VrtNodeHelper<kWriteLock>::GetKeyIndexChar(node, same_prefix_length), child);
     auto *old_node = node;
     node = new_node;
     parent->Unlock();
@@ -288,17 +298,23 @@ bool Vrt<ValueType, kWriteLock, kReadThreadNum>::UpsertImpl(VrtNode<kWriteLock> 
     FreeNode(old_node);
     return true;
   }
-  parent->Unlock();
   // 继续搜索，没有找到对应子节点，增新增叶子挂在当前节点上
   if (VrtNode<kWriteLock> *&next_node = VrtNodeHelper<kWriteLock>::FindChild(node, key[same_prefix_length]);
       next_node != nullptr) {
+    parent->Unlock();
     key.remove_prefix(same_prefix_length + 1);
     return UpsertImpl(next_node, node, key, std::forward<Args>(args)...);
   }
   char next_char = key[same_prefix_length];
   key.remove_prefix(same_prefix_length + 1);
-  auto *new_node = VrtNodeHelper<kWriteLock>::template CreateVrtNode<ValueType>(key, std::forward<Args>(args)...);
-  node->AddChild(next_char, new_node);
+  auto *new_node =
+      VrtNodeHelper<kWriteLock>::template CreateVrtNode<LeafNode, ValueType>(key, std::forward<Args>(args)...);
+  auto *node_pre_add_child = node;
+  node = VrtNodeHelper<kWriteLock>::template AddChild<ValueType>(node, next_char, new_node);
+  if (node != node_pre_add_child) {
+    FreeNode(node_pre_add_child);
+  }
+  parent->Unlock();
   node->Unlock();
   return true;
 }
@@ -329,30 +345,12 @@ bool Vrt<ValueType, kWriteLock, kReadThreadNum>::DeleteImpl(VrtNode<kWriteLock> 
   }
   if (key.length() == same_prefix_length) {
     if (node->has_value) {
-      if (0 == node->child_cnt) {
-        // 删除节点
-        auto *old_node = node;
-        node = nullptr;
-        parent->child_cnt--;
-        parent->Unlock();
-        FreeNode(old_node);
-      } else if (1 == node->child_cnt) {
-        auto *old_node = node;
-        for (auto *child : node->childs) {
-          if (child != nullptr) {
-            node = child;
-            break;
-          }
-        }
-        parent->Unlock();
-        FreeNode(old_node);
-      } else {
-        auto *new_node = VrtNodeHelper<kWriteLock>::template CreateVrtNodeByDeleteValue<ValueType>(node);
-        auto *old_node = node;
-        node = new_node;
-        parent->Unlock();
-        FreeNode(old_node);
-      }
+      // TODO，考虑路径压缩
+      auto *new_node = VrtNodeHelper<kWriteLock>::template CreateVrtNodeByDeleteValue<ValueType>(node);
+      auto *old_node = node;
+      node = new_node;
+      parent->Unlock();
+      FreeNode(old_node);
       return true;
     }
     node->Unlock();

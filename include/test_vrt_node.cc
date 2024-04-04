@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "vrt_node_new.h"
+#include "vrt_node.h"
 
 using namespace vrt;
 

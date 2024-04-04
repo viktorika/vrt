@@ -1,12 +1,12 @@
 #include "benchmark/benchmark.h"
+#include <unistd.h>
 #include <random>
-#include <shared_mutex>
 #include <thread>
 #include <utility>
 #include "phmap.h"
 #include "vrt.h"
 
-uint32_t kKeySize = 10000;
+uint32_t kKeySize = 1000000;
 uint32_t kKeyLength = 20;
 std::vector<std::string> keys(kKeySize);
 constexpr uint32_t thread_num = 5;
@@ -46,7 +46,7 @@ static void RunInsertDeConstructPhmapByMutex(benchmark::State& state) {
   }
 }
 
-static void RunInsertDeConstructArt(benchmark::State& state) {
+static void RunInsertDeConstructVrt(benchmark::State& state) {
   for (auto _ : state) {
     vrt::Vrt<std::string, true, thread_num> vrt;
     auto func = [&](int start, int end) {
@@ -92,7 +92,7 @@ static void RunFindPhmapByMutex(benchmark::State& state) {
   }
 }
 
-static void RunFindArt(benchmark::State& state) {
+static void RunFindVrt(benchmark::State& state) {
   vrt::Vrt<std::string, true, thread_num> vrt;
   for (int i = 0; i < kKeySize; i++) {
     vrt.Upsert(keys[i], "123");
@@ -121,49 +121,53 @@ static void RunDeletePhmapByMutex(benchmark::State& state) {
                                   phmap::priv::hash_default_eq<std::string>,
                                   std::allocator<std::pair<const std::string, std::string>>, 8, std::mutex>
         map;
-    for (int i = 0; i < kKeySize; i++) {
-      map.try_emplace(keys[i], "123");
+    auto func = [&](int start, int end) {
+      for (int i = start; i < end; i++) {
+        map.try_emplace(keys[i], "123");
+      }
+      for (int i = start; i < end; i++) {
+        map.erase(keys[i]);
+      }
+    };
+    std::vector<std::thread> ts(thread_num);
+    auto batch = kKeySize / thread_num;
+    for (int i = 0; i < thread_num; i++) {
+      ts[i] = std::thread(func, i * batch, (i + 1) * batch);
     }
-    for (int i = 0; i < kKeySize; i++) {
-      map.erase(keys[i]);
-    }
-  }
-}
-
-static void RunDeletePhmapByRWMutex(benchmark::State& state) {
-  for (auto _ : state) {
-    phmap::parallel_flat_hash_map<std::string, std::string, phmap::priv::hash_default_hash<std::string>,
-                                  phmap::priv::hash_default_eq<std::string>,
-                                  std::allocator<std::pair<const std::string, std::string>>, 8, std::shared_mutex>
-        map;
-    for (int i = 0; i < kKeySize; i++) {
-      map.try_emplace(keys[i], "123");
-    }
-    for (int i = 0; i < kKeySize; i++) {
-      map.erase(keys[i]);
+    for (int i = 0; i < thread_num; i++) {
+      ts[i].join();
     }
   }
 }
 
-static void RunDeleteArt(benchmark::State& state) {
+static void RunDeleteVrt(benchmark::State& state) {
   for (auto _ : state) {
     vrt::Vrt<std::string, true, thread_num> vrt;
-    for (int i = 0; i < kKeySize; i++) {
-      vrt.Upsert(keys[i], "123");
+    auto func = [&](int start, int end) {
+      for (int i = start; i < end; i++) {
+        vrt.Upsert(keys[i], "123");
+      }
+      for (int i = start; i < end; i++) {
+        vrt.Delete(keys[i]);
+      }
+    };
+    std::vector<std::thread> ts(thread_num);
+    auto batch = kKeySize / thread_num;
+    for (int i = 0; i < thread_num; i++) {
+      ts[i] = std::thread(func, i * batch, (i + 1) * batch);
     }
-    for (int i = 0; i < kKeySize; i++) {
-      vrt.Delete(keys[i]);
+    for (int i = 0; i < thread_num; i++) {
+      ts[i].join();
     }
   }
 }
 
 BENCHMARK(RunInsertDeConstructPhmapByMutex);
-BENCHMARK(RunInsertDeConstructArt);
+BENCHMARK(RunInsertDeConstructVrt);
 BENCHMARK(RunFindPhmapByMutex);
-BENCHMARK(RunFindArt);
+BENCHMARK(RunFindVrt);
 BENCHMARK(RunDeletePhmapByMutex);
-BENCHMARK(RunDeletePhmapByRWMutex);
-BENCHMARK(RunDeleteArt);
+BENCHMARK(RunDeleteVrt);
 
 int main(int argc, char** argv) {
   GenKeys();

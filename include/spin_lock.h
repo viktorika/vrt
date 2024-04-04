@@ -58,7 +58,6 @@ class SpinLock {
   std::atomic<uint8_t> lock_;
 
   bool cas(uint8_t compare, uint8_t new_val) noexcept {
-    // todo maybe use release
     return lock_.compare_exchange_strong(compare, new_val, std::memory_order_acquire, std::memory_order_relaxed);
   }
 };
