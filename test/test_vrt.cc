@@ -9,7 +9,7 @@ TEST(NormalInsertFindTest, NormalTest) {
   std::array<std::string, 6> keys = {
       "abcdefg", "ab", "abcght", "abqert", "abcghq", "abcgh",
   };
-  vrt::Vrt<std::string> vrt_tree;
+  vrt::Vrt<std::string, true, 1> vrt_tree;
   for (int i = 0; i < 6; i++) {
     EXPECT_EQ(vrt_tree.Insert(keys[i], nullptr, std::to_string(i)), true);
   }
@@ -29,7 +29,7 @@ TEST(NormalDeleteTest, NormalTest) {
   std::array<std::string, 6> keys = {
       "abcdefg", "ab", "abcght", "abqert", "abcghq", "abcgh",
   };
-  vrt::Vrt<std::string> vrt_tree;
+  vrt::Vrt<std::string, true, 1> vrt_tree;
   for (int i = 0; i < 6; i++) {
     EXPECT_EQ(vrt_tree.Insert(keys[i], nullptr, std::to_string(i)), true);
   }
@@ -52,7 +52,7 @@ TEST(ErrTest, ErrUpdateTest) {
   std::array<std::string, 6> keys = {
       "abcdefg", "ab", "abcght", "abqert", "abcghq", "abcgh",
   };
-  vrt::Vrt<std::string> vrt_tree;
+  vrt::Vrt<std::string, true, 1> vrt_tree;
   for (int i = 0; i < 6; i++) {
     EXPECT_EQ(vrt_tree.Update(keys[i], std::to_string(i)), false);
   }
@@ -62,7 +62,7 @@ TEST(ErrTest, ErrDeleteTest) {
   std::array<std::string, 6> keys = {
       "abcdefg", "ab", "abcght", "abqert", "abcghq", "abcgh",
   };
-  vrt::Vrt<std::string> vrt_tree;
+  vrt::Vrt<std::string, true, 1> vrt_tree;
   for (int i = 0; i < 6; i++) {
     EXPECT_EQ(vrt_tree.Delete(keys[i]), false);
   }
@@ -76,7 +76,7 @@ TEST(RandomTest, RandomTest) {
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<int> distrib(-128, 127);
-  vrt::Vrt<std::string> vrt_tree;
+  vrt::Vrt<std::string, true, 1> vrt_tree;
   for (int i = 0; i < kMaxKey; i++) {
     keys[i].resize(kMaxKeyLength);
     for (int j = 0; j < kMaxKeyLength; j++) {

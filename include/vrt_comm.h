@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 namespace vrt {
 
@@ -11,6 +12,15 @@ namespace vrt {
 #  define likely(x) (x)
 #  define unlikely(x) (x)
 #endif
+
+constexpr size_t kFour = 4;
+constexpr size_t kFive = 5;
+constexpr size_t kTen = 10;
+constexpr size_t kSixteen = 16;
+constexpr size_t kSeventeen = 17;
+constexpr size_t kFortyEight = 48;
+constexpr size_t kFortyNight = 49;
+constexpr size_t kTwoFiveSix = 256;
 
 constexpr size_t kNodeChildMaxCnt = 256;
 constexpr size_t kMaxKeySize = 1 << 23;
