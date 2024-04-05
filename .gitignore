@@ -1,3 +1,4 @@
 compile_flags.txt
 build/
 .cache/
+compile_commands.json
