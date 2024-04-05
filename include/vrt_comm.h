@@ -1,8 +1,8 @@
 /*
  * @Author: viktorika 
  * @Date: 2024-04-05 19:01:40 
- * @Last Modified by:   viktorika 
- * @Last Modified time: 2024-04-05 19:01:40 
+ * @Last Modified by: viktorika
+ * @Last Modified time: 2024-04-05 19:07:25
  */
 #pragma once
 
@@ -29,7 +29,7 @@ constexpr size_t kFortyNight = 49;
 constexpr size_t kTwoFiveSix = 256;
 
 constexpr size_t kNodeChildMaxCnt = 256;
-constexpr size_t kMaxKeySize = 1 << 23;
+constexpr size_t kMaxKeySize = 1 << 20;
 
 constexpr uint8_t kFree = 0;
 constexpr uint8_t kLocked = 1;
