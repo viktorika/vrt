@@ -3,6 +3,9 @@
 #include "ebr.h"
 #include "vrt_comm.h"
 #include "vrt_node.h"
+#ifdef MEM_DEBUG
+#  include <iostream>
+#endif
 
 namespace vrt {
 
@@ -48,6 +51,11 @@ Vrt<ValueType, kWriteLock, kReadThreadNum>::~Vrt() {
     return;
   }
   VrtNodeHelper<kWriteLock>::template DestroyTree<ValueType>(root_);
+#ifdef MEM_DEBUG
+  ebr_mgr_.ClearAllRetireList();
+  std::cout << "create_node_cnt = " << VrtNodeHelper<kWriteLock>::GetCreateNodeCnt() << std::endl;
+  std::cout << "destroy_node_cnt = " << VrtNodeHelper<kWriteLock>::GetDestroyNodeCnt() << std::endl;
+#endif
 }
 
 template <class ValueType, bool kWriteLock, uint32_t kReadThreadNum>
