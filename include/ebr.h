@@ -1,3 +1,9 @@
+/*
+ * @Author: viktorika 
+ * @Date: 2024-04-05 19:01:45 
+ * @Last Modified by:   viktorika 
+ * @Last Modified time: 2024-04-05 19:01:45 
+ */
 #pragma once
 
 #include <array>
