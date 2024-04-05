@@ -1,8 +1,8 @@
 /*
  * @Author: viktorika 
  * @Date: 2024-04-05 19:01:45 
- * @Last Modified by:   viktorika 
- * @Last Modified time: 2024-04-05 19:01:45 
+ * @Last Modified by: viktorika
+ * @Last Modified time: 2024-04-05 19:28:36
  */
 #pragma once
 
@@ -16,9 +16,6 @@ namespace vrt {
 
 constexpr uint8_t kEpochSize = 3;
 constexpr uint8_t kCacheLineSize = 64;
-
-// 思路，有一个全局的线程id分配器，维护了n个线程id。
-// GetThreadID时创建一个线程唯一变量，这个变量初始化会从线程id分配器里获取一个可用的线程id，销毁时会释放这个线程id
 
 template <uint32_t kReadThreadNum>
 class ThreadIDManager;
