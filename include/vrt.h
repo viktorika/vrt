@@ -1,3 +1,9 @@
+/*
+ * @Author: viktorika
+ * @Date: 2024-04-05 19:01:23
+ * @Last Modified by: viktorika
+ * @Last Modified time: 2024-04-05 19:45:36
+ */
 #pragma once
 
 #include "ebr.h"
@@ -9,6 +15,14 @@
 
 namespace vrt {
 
+/**
+ * @param ValueType
+ * @param kWriteLock: whether a write lock is needed or not. It is not necessary to enable it for read-only or
+ * single-write, multi-read scenarios.
+ * @param kReadThreadNum: The number of read threads, which is very important, must be set to the maximum possible
+ * number of read threads. Setting it too low will cause a core dump, while setting it too high will affect write
+ * performance.
+ */
 template <class ValueType, bool kWriteLock, uint32_t kReadThreadNum>
 class Vrt {
  public:
@@ -18,13 +32,18 @@ class Vrt {
   ~Vrt();
   Vrt &operator=(const Vrt &) = delete;
 
+  // only read, find the key and return the value
   bool Find(std::string_view key, ValueType *value);
+  // If the key does not exist, insert it; otherwise, return the value from vrt
   template <class... Args>
   bool Insert(std::string_view key, ValueType *old_value, Args &&...args);
+  // if the key exist, update it
   template <class... Args>
   bool Update(std::string_view key, Args &&...args);
   template <class... Args>
+  // if the key does not exist, insert it; otherwise, update it
   bool Upsert(std::string_view key, Args &&...args);
+  // if the key exist, delete it
   bool Delete(std::string_view key);
 
  private:
