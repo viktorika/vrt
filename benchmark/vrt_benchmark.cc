@@ -5,6 +5,7 @@
 #include <utility>
 #include "phmap.h"
 #include "vrt.h"
+#include "vrt_node.h"
 
 uint32_t kKeySize = 1000000;
 uint32_t kKeyLength = 20;
@@ -175,5 +176,11 @@ int main(int argc, char** argv) {
   if (::benchmark ::ReportUnrecognizedArguments(argc, argv)) return 1;
   ::benchmark ::RunSpecifiedBenchmarks();
   ::benchmark ::Shutdown();
+#ifdef MEM_DEBUG
+  std::cout << vrt::VrtNodeHelper<true>::GetCreateNodeCnt() << std::endl;
+  std::cout << vrt::VrtNodeHelper<true>::GetDestroyNodeCnt() << std::endl;
+  std::cout << vrt::VrtNodeHelper<false>::GetCreateNodeCnt() << std::endl;
+  std::cout << vrt::VrtNodeHelper<false>::GetDestroyNodeCnt() << std::endl;
+#endif
   return 0;
 }

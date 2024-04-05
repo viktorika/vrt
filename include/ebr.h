@@ -68,18 +68,19 @@ struct TLS {
 template <class RCObject, class DestroyClass, uint32_t kReadThreadNum>
 class EbrManager {
  public:
-  EbrManager(const EbrManager<RCObject, DestroyClass, kReadThreadNum> &) = delete;
-  EbrManager(EbrManager<RCObject, DestroyClass, kReadThreadNum> &&) = delete;
-  EbrManager &operator=(const EbrManager<RCObject, DestroyClass, kReadThreadNum> &) = delete;
-  ~EbrManager() {
-    for (int i = 0; i < kEpochSize; i++) {
-      ClearRetireList(i);
-    }
-  }
-
   EbrManager() : tls_list_(), global_epoch_(0), update_(false), write_cnt_(0) {
     for (int i = 0; i < kEpochSize; i++) {
       retire_list_[i].store(nullptr, std::memory_order_release);
+    }
+  }
+  EbrManager(const EbrManager<RCObject, DestroyClass, kReadThreadNum> &) = delete;
+  EbrManager(EbrManager<RCObject, DestroyClass, kReadThreadNum> &&) = delete;
+  EbrManager &operator=(const EbrManager<RCObject, DestroyClass, kReadThreadNum> &) = delete;
+  ~EbrManager() { ClearAllRetireList(); }
+
+  void ClearAllRetireList() {
+    for (int i = 0; i < kEpochSize; i++) {
+      ClearRetireList(i);
     }
   }
 

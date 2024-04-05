@@ -323,6 +323,9 @@ class VrtNodeHelper {
 
   template <VrtNodeType node_type, class ValueType, class... Args>
   inline static VrtNode<kWriteLock> *CreateVrtNode(std::string_view key, Args &&...args) {
+#ifdef MEM_DEBUG
+    create_node_cnt++;
+#endif
     if constexpr (Node4 == node_type) {
       auto *new_node = reinterpret_cast<VrtNode4<kWriteLock> *>(
           malloc(sizeof(VrtNode4<kWriteLock>) + key.length() + sizeof(ValueType)));
@@ -385,6 +388,9 @@ class VrtNodeHelper {
 
   template <VrtNodeType node_type>
   inline static VrtNode<kWriteLock> *CreateVrtNodeWithoutValue(std::string_view key) {
+#ifdef MEM_DEBUG
+    create_node_cnt++;
+#endif
     if constexpr (Node4 == node_type) {
       auto *new_node = reinterpret_cast<VrtNode4<kWriteLock> *>(malloc(sizeof(VrtNode4<kWriteLock>) + key.length()));
       new_node->type = Node4;
@@ -439,6 +445,9 @@ class VrtNodeHelper {
 
   template <class ValueType>
   inline static VrtNode<kWriteLock> *CreateVrtNodeByRemovePrefix(VrtNode<kWriteLock> *node, size_t remove_size) {
+#ifdef MEM_DEBUG
+    create_node_cnt++;
+#endif
     switch (node->type) {
       case Node4: {
         size_t new_node_size =
@@ -541,6 +550,9 @@ class VrtNodeHelper {
 
   template <class ValueType, class... Args>
   inline static VrtNode<kWriteLock> *CreateVrtNodeByAddValue(VrtNode<kWriteLock> *node, Args &&...args) {
+#ifdef MEM_DEBUG
+    create_node_cnt++;
+#endif
     switch (node->type) {
       case Node4: {
         auto *old_node = reinterpret_cast<VrtNode4<kWriteLock> *>(node);
@@ -622,6 +634,9 @@ class VrtNodeHelper {
 
   template <class ValueType>
   inline static VrtNode<kWriteLock> *CreateVrtNodeByDeleteValue(VrtNode<kWriteLock> *node) {
+#ifdef MEM_DEBUG
+    create_node_cnt++;
+#endif
     switch (node->type) {
       case Node4: {
         auto *old_node = reinterpret_cast<VrtNode4<kWriteLock> *>(node);
@@ -698,6 +713,9 @@ class VrtNodeHelper {
 
   template <class ValueType>
   inline static void DestroyNode(VrtNode<kWriteLock> *node) {
+#ifdef MEM_DEBUG
+    destroy_node_cnt++;
+#endif
     switch (node->type) {
       case Node4: {
         auto *real_node = reinterpret_cast<VrtNode4<kWriteLock> *>(node);
@@ -751,6 +769,9 @@ class VrtNodeHelper {
 
   template <class ValueType>
   inline static void DestroyTree(VrtNode<kWriteLock> *node) {
+#ifdef MEM_DEBUG
+    destroy_node_cnt++;
+#endif
     switch (node->type) {
       case Node4: {
         auto *real_node = reinterpret_cast<VrtNode4<kWriteLock> *>(node);
@@ -817,8 +838,17 @@ class VrtNodeHelper {
     }
   }
 
+#ifdef MEM_DEBUG
+  static uint32_t GetCreateNodeCnt() { return create_node_cnt; }
+  static uint32_t GetDestroyNodeCnt() { return destroy_node_cnt; }
+#endif
+
  private:
   static VrtNode<kWriteLock> *kVrtNodeNullObject;
+#ifdef MEM_DEBUG
+  static uint32_t create_node_cnt;
+  static uint32_t destroy_node_cnt;
+#endif
 };
 
 template <class ValueType, bool kWriteLock = true>
@@ -833,5 +863,13 @@ class VrtNodeDestroy {
 
 template <bool kWriteLock>
 VrtNode<kWriteLock> *VrtNodeHelper<kWriteLock>::kVrtNodeNullObject{nullptr};
+
+#ifdef MEM_DEBUG
+template <bool kWriteLock>
+uint32_t VrtNodeHelper<kWriteLock>::create_node_cnt{0};
+
+template <bool kWriteLock>
+uint32_t VrtNodeHelper<kWriteLock>::destroy_node_cnt{0};
+#endif
 
 }  // namespace vrt
