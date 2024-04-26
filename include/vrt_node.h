@@ -1,8 +1,8 @@
 /*
- * @Author: viktorika 
- * @Date: 2024-04-05 19:01:36 
- * @Last Modified by:   viktorika 
- * @Last Modified time: 2024-04-05 19:01:36 
+ * @Author: viktorika
+ * @Date: 2024-04-05 19:01:36
+ * @Last Modified by: victorika
+ * @Last Modified time: 2024-04-26 16:37:16
  */
 #pragma once
 
@@ -187,7 +187,9 @@ class VrtNodeHelper {
     switch (node->type) {
       case Node4: {
         auto *node4 = static_cast<VrtNode4<kWriteLock> *>(node);
-        for (int i = 0; i < node4->child_cnt; i++) {
+        auto child_cnt = node4->child_cnt;
+        std::atomic_thread_fence(std::memory_order_acquire);
+        for (int i = 0; i < child_cnt; i++) {
           if (node4->edge[i] == find_char) {
             return node4->childs[i];
           }
@@ -195,7 +197,9 @@ class VrtNodeHelper {
       } break;
       case Node16: {
         auto *node16 = static_cast<VrtNode16<kWriteLock> *>(node);
-        for (int i = 0; i < node16->child_cnt; i++) {
+        auto child_cnt = node16->child_cnt;
+        std::atomic_thread_fence(std::memory_order_acquire);
+        for (int i = 0; i < child_cnt; i++) {
           if (node16->edge[i] == find_char) {
             return node16->childs[i];
           }
@@ -204,6 +208,7 @@ class VrtNodeHelper {
       case Node48: {
         auto *node48 = static_cast<VrtNode48<kWriteLock> *>(node);
         if (auto index = node48->childs_index[static_cast<uint8_t>(find_char)]; index != -1) {
+          std::atomic_thread_fence(std::memory_order_acquire);
           return node48->childs[static_cast<uint8_t>(index)];
         }
       } break;
