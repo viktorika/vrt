@@ -1,8 +1,8 @@
 /*
- * @Author: viktorika 
- * @Date: 2024-04-05 19:01:45 
- * @Last Modified by: viktorika
- * @Last Modified time: 2024-04-05 19:28:36
+ * @Author: viktorika
+ * @Date: 2024-04-05 19:01:45
+ * @Last Modified by: victorika
+ * @Last Modified time: 2024-04-26 11:15:51
  */
 #pragma once
 
@@ -122,7 +122,8 @@ class EbrManager {
     auto epoch = global_epoch_.load(std::memory_order_acquire);
     // TODO 记录上一次搜索到的位置
     for (int i = 0; i < tls_list_.size(); i++) {
-      if (tls_list_[i].active.test() && tls_list_[i].epoch.load(std::memory_order::memory_order_acquire) != epoch) {
+      if (tls_list_[i].active.test(std::memory_order::memory_order_acquire) &&
+          tls_list_[i].epoch.load(std::memory_order::memory_order_acquire) != epoch) {
         return;
       }
     }
