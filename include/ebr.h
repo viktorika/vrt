@@ -30,7 +30,7 @@ struct ThreadID {
 template <uint32_t kReadThreadNum>
 class ThreadIDManager {
  public:
-  ThreadIDManager() : tid_list_(kReadThreadNum) { std::iota(tid_list_.begin(), tid_list_.end(), 1); }
+  ThreadIDManager() : tid_list_(kReadThreadNum) { std::iota(tid_list_.begin(), tid_list_.end(), 0); }
   ThreadIDManager(const ThreadIDManager &) = delete;
   ThreadIDManager(ThreadIDManager &&) = delete;
   ThreadIDManager &operator=(const ThreadIDManager &) = delete;
@@ -43,6 +43,9 @@ class ThreadIDManager {
 
   uint32_t AcquireThreadID() {
     std::lock_guard<std::mutex> lock(tid_list_mutex_);
+    if (tid_list_.empty()) {
+      std::abort();
+    }
     auto tid = tid_list_.back();
     tid_list_.pop_back();
     return tid;
@@ -90,7 +93,7 @@ class EbrManager {
   inline void StartRead() {
     auto &tls = GetTLS();
     tls.active.test_and_set(std::memory_order_release);
-    tls.epoch.store(global_epoch_.load(std::memory_order_acquire), std::memory_order_release);
+    tls.epoch.store(global_epoch_.load(std::memory_order_acquire), std::memory_order_seq_cst);
   }
 
   inline void EndRead() { GetTLS().active.clear(std::memory_order_release); }
@@ -115,6 +118,11 @@ class EbrManager {
  private:
   inline TLS &GetTLS() {
     thread_local ThreadID<kReadThreadNum> thread_id;
+    thread_local struct ScopedCleaner {
+      TLS &tls;
+      ~ScopedCleaner() { tls.active.clear(std::memory_order_release); }
+    } cleaner{tls_list_[thread_id.tid]};
+
     return tls_list_[thread_id.tid];
   }
 
@@ -133,14 +141,13 @@ class EbrManager {
   }
 
   inline void ClearRetireList(int index) {
-    auto *retire_node = retire_list_[index].load(std::memory_order_acquire);
+    auto *retire_node = retire_list_[index].exchange(nullptr, std::memory_order_acquire);
     while (retire_node != nullptr) {
       DestroyClass destroy(retire_node->obj);
       auto *old_node = retire_node;
       retire_node = retire_node->next;
       delete old_node;
     }
-    retire_list_[index].store(nullptr, std::memory_order_release);
   }
 
   struct RetireNode {
